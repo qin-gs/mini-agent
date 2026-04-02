@@ -1,4 +1,3 @@
-import {promiseHooks} from "node:v8";
 import {promisify} from "node:util";
 import {exec} from "node:child_process";
 import {Tool} from "../types";
