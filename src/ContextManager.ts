@@ -28,7 +28,7 @@ export class ContextManager {
      */
     private readonly compactionThreshold: number;
 
-    constructor(options: {maxTurns?: number; compactionThreshold?: number}) {
+    constructor(options: { maxTurns?: number; compactionThreshold?: number }) {
         this.maxTurns = options.maxTurns ?? 20;
         this.compactionThreshold = options.compactionThreshold ?? 40;
     }
@@ -93,7 +93,7 @@ export class ContextManager {
 
         if (lastMessage
             && lastMessage.role === "user"
-        && Array.isArray(lastMessage.content)) {
+            && Array.isArray(lastMessage.content)) {
             lastMessage.content.push(...results)
         } else {
             this.messages.push({
