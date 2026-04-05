@@ -100,12 +100,11 @@ export class AgentLoop {
         const contentBlocks: ContentBlock[] = [];
         let stopReason = "end_turn";
 
-        const stream = await this.client.messages.stream({
+        const stream = this.client.messages.stream({
             model: this.model,
             max_tokens: 8096,
             system: systemPrompt,
-            // TODO 这里格式不对
-            // tools: this.registry.toApiFormat(),
+            tools: this.registry.toApiFormat(),
             messages: messages.map((msg) => ({
                 role: msg.role,
                 content: msg.content,

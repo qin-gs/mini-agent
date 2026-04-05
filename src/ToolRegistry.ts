@@ -1,4 +1,4 @@
-import {Tool} from "./types";
+import {Tool, JSONSchema} from "./types";
 
 /**
  * 注册工具
@@ -43,17 +43,23 @@ export class ToolRegistry {
     }
 
     /**
-     * 将工具列表转为想要的格式
+     * 将工具列表转为 Anthropic API 格式
      */
     toApiFormat(): Array<{
         name: string;
         description: string;
-        input_schema: Tool["inputSchema"];
+        input_schema: JSONSchema & { type: "object" };
     }> {
-        return this.all().map(tool => ({
-            name: tool.name,
-            description: tool.description,
-            input_schema: tool.inputSchema,
-        }));
+        return this.all().map(tool => {
+            // 确保工具输入模式是对象类型
+            if (tool.inputSchema.type !== "object") {
+                throw new Error(`工具 ${tool.name} 的输入模式类型必须是 "object"，实际是 ${tool.inputSchema.type}`);
+            }
+            return {
+                name: tool.name,
+                description: tool.description,
+                input_schema: tool.inputSchema as JSONSchema & { type: "object" },
+            };
+        });
     }
 }

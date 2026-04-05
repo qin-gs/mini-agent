@@ -8,6 +8,7 @@ export interface JSONSchema {
     description?: string;
     items?: JSONSchema;
     enum?: unknown[];
+    [key: string]: any;
 }
 
 /**
