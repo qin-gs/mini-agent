@@ -112,7 +112,7 @@ export class AgentLoop {
             })) as Anthropic.MessageParam[],
         });
 
-        let currentTextBlock: { type: "text"; text } | null = null;
+        let currentTextBlock: { type: "text"; text: string } | null = null;
         let currentToolBlock: ToolUseBlock | null = null;
         let currentToolInput = "";
 
