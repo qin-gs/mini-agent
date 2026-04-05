@@ -62,4 +62,31 @@ export class ToolRegistry {
             };
         });
     }
+
+    /**
+     * 将工具列表转为 OpenAI API 格式
+     */
+    toOpenAIFormat(): Array<{
+        type: "function";
+        function: {
+            name: string;
+            description: string;
+            parameters: JSONSchema;
+        };
+    }> {
+        return this.all().map(tool => {
+            // 确保工具输入模式是对象类型
+            if (tool.inputSchema.type !== "object") {
+                throw new Error(`工具 ${tool.name} 的输入模式类型必须是 "object"，实际是 ${tool.inputSchema.type}`);
+            }
+            return {
+                type: "function" as const,
+                function: {
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: tool.inputSchema,
+                },
+            };
+        });
+    }
 }

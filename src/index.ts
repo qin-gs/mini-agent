@@ -40,7 +40,7 @@ async function main() {
     const permissions = new PermissionChecker(config.permission, rl)
 
     // 6. 创建 agent loop
-    const agent = new AgentLoop(context, registry, permissions, {model: config.model});
+    const agent = new AgentLoop(context, registry, permissions, {model: config.model, apiBaseUrl: config.apiBaseUrl});
 
     // 7. 启动 cli
     console.log("-".repeat(50));

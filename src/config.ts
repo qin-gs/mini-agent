@@ -10,6 +10,8 @@ export interface Config {
   maxTurns: number;
   /** 压缩阈值 */
   compactionThreshold: number;
+  /** API 基础 URL（可选） */
+  apiBaseUrl?: string;
 }
 
 /**
@@ -21,6 +23,7 @@ export function loadConfig(): Config {
     model: process.env.MINI_AGENT_MODEL ?? 'deepseek-reasoner',
     maxTurns: parseInt(process.env.MINI_AGENT_MAX_TURNS ?? '20', 10),
     compactionThreshold: parseInt(process.env.MINI_AGENT_COMPACTION_THRESHOLD ?? '40', 10),
+    apiBaseUrl: process.env.DEEPSEEK_API_BASE,
   };
 }
 

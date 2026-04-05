@@ -1,24 +1,28 @@
 /**
  * 主循环
  */
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import {ContextManager} from "./ContextManager";
 import {ToolRegistry} from "./ToolRegistry";
 import {PermissionChecker} from "./PermissionChecker";
 import {ContentBlock, TextBlock, ToolResultBlock, ToolUseBlock} from "./types";
 
 export class AgentLoop {
-    private client: Anthropic;
+    private client: OpenAI;
     private model: string;
 
     constructor(
         private context: ContextManager,
         private registry: ToolRegistry,
         private permissions: PermissionChecker,
-        options: { model?: string } = {}
+        options: { model?: string; apiBaseUrl?: string } = {}
     ) {
-        this.client = new Anthropic();
-        this.model = options.model ?? "deepseek";
+        this.client = new OpenAI({
+            apiKey: process.env.API_KEY || process.env.OPENAI_API_KEY,
+            baseURL: options.apiBaseUrl || process.env.DEEPSEEK_API_BASE || "https://api.deepseek.com",
+        });
+        this.model = options.model ?? "deepseek-reasoner";
     }
 
     async run(
@@ -100,63 +104,167 @@ export class AgentLoop {
         const contentBlocks: ContentBlock[] = [];
         let stopReason = "end_turn";
 
-        const stream = this.client.messages.stream({
-            model: this.model,
-            max_tokens: 8096,
-            system: systemPrompt,
-            tools: this.registry.toApiFormat(),
-            messages: messages.map((msg) => ({
-                role: msg.role,
-                content: msg.content,
-            })) as Anthropic.MessageParam[],
-        });
+        // 转换消息为 OpenAI 格式
+        const openAIMessages: ChatCompletionMessageParam[] = [];
 
-        let currentTextBlock: { type: "text"; text: string } | null = null;
-        let currentToolBlock: ToolUseBlock | null = null;
-        let currentToolInput = "";
+        // 添加系统提示
+        if (systemPrompt) {
+            openAIMessages.push({
+                role: 'system',
+                content: systemPrompt,
+            });
+        }
 
-        for await (const event of stream) {
-            if (event.type === "content_block_start") {
-                if (event.content_block.type === "text") {
-                    currentTextBlock = {
-                        type: "text",
-                        text: "",
-                    };
-                    currentToolBlock = null;
-                } else if (event.content_block.type === "tool_use") {
-                    currentToolBlock = {
-                        type: "tool_use",
-                        id: event.content_block.id,
-                        name: event.content_block.name,
-                        input: {},
-                    };
-                    currentToolInput = "";
-                    currentTextBlock = null;
+        // 转换历史消息
+        for (const msg of messages) {
+            if (typeof msg.content === 'string') {
+                // 简单文本消息
+                openAIMessages.push({
+                    role: msg.role,
+                    content: msg.content,
+                });
+            } else if (Array.isArray(msg.content)) {
+                // 内容块数组（可能是工具调用或结果）
+                // 对于用户消息，合并所有文本块
+                if (msg.role === 'user') {
+                    const text = msg.content
+                        .filter((b): b is TextBlock => b.type === 'text')
+                        .map(b => b.text)
+                        .join('');
+                    openAIMessages.push({
+                        role: 'user',
+                        content: text,
+                    });
+                    // 工具结果块转换为 tool 角色消息
+                    const toolResults = msg.content.filter((b): b is ToolResultBlock => b.type === 'tool_result');
+                    for (const toolResult of toolResults) {
+                        openAIMessages.push({
+                            role: 'tool',
+                            content: toolResult.content,
+                            tool_call_id: toolResult.tool_use_id,
+                        });
+                    }
+                } else if (msg.role === 'assistant') {
+                    // 助手消息可能包含文本和工具调用
+                    const textBlocks = msg.content.filter((b): b is TextBlock => b.type === 'text');
+                    const toolUseBlocks = msg.content.filter((b): b is ToolUseBlock => b.type === 'tool_use');
+
+                    const textContent = textBlocks.map(b => b.text).join('');
+                    if (textContent) {
+                        openAIMessages.push({
+                            role: 'assistant',
+                            content: textContent,
+                        });
+                    }
+
+                    if (toolUseBlocks.length > 0) {
+                        openAIMessages.push({
+                            role: 'assistant',
+                            content: null,
+                            tool_calls: toolUseBlocks.map(tool => ({
+                                id: tool.id,
+                                type: 'function' as const,
+                                function: {
+                                    name: tool.name,
+                                    arguments: JSON.stringify(tool.input),
+                                },
+                            })),
+                        });
+                    }
                 }
-            } else if (event.type === "content_block_delta") {
-                if (event.delta.type === "text_delta" && currentTextBlock) {
-                    currentTextBlock.text += event.delta.text;
-                    // 实时推送给调用方
-                    onText(event.delta.text);
-                } else if (event.delta.type === "input_json_delta" && currentToolBlock) {
-                    currentToolInput += event.delta.partial_json;
-                }
-            } else if (event.type === "content_block_stop") {
-                if (currentTextBlock) {
-                    contentBlocks.push(currentTextBlock);
-                    currentTextBlock = null;
-                } else if (currentToolBlock) {
-                    currentToolBlock.input = JSON.parse(currentToolInput || "{}");
-                    contentBlocks.push(currentToolBlock);
-                    currentToolBlock = null;
-                    currentToolInput = "";
-                }
-            } else if (event.type === "message_delta") {
-                stopReason = event.delta.stop_reason ?? "end_turn";
             }
         }
 
-        return {contentBlocks, stopReason};
+        // 获取 OpenAI 格式的工具定义
+        const tools = this.registry.toOpenAIFormat();
+
+        // 调用 OpenAI API
+        const stream = await this.client.chat.completions.create({
+            model: this.model,
+            messages: openAIMessages,
+            tools: tools.length > 0 ? tools : undefined,
+            stream: true,
+            max_completion_tokens: 8096,
+        });
+
+        let currentText = '';
+        let currentToolCalls: Map<string, {
+            id: string;
+            name: string;
+            arguments: string;
+        }> = new Map();
+
+        for await (const chunk of stream) {
+            const choice = chunk.choices[0];
+            if (!choice) continue;
+
+            const delta = choice.delta;
+
+            // 处理文本增量
+            if (delta.content) {
+                currentText += delta.content;
+                onText(delta.content);
+            }
+
+            // 处理工具调用增量
+            if (delta.tool_calls) {
+                for (const toolCallDelta of delta.tool_calls) {
+                    const { index, id, function: funcDelta } = toolCallDelta;
+
+                    if (!currentToolCalls.has(index.toString())) {
+                        currentToolCalls.set(index.toString(), {
+                            id: id || '',
+                            name: '',
+                            arguments: '',
+                        });
+                    }
+
+                    const toolCall = currentToolCalls.get(index.toString())!;
+                    if (id) toolCall.id = id;
+                    if (funcDelta?.name) toolCall.name += funcDelta.name;
+                    if (funcDelta?.arguments) toolCall.arguments += funcDelta.arguments;
+                }
+            }
+
+            // 检查停止原因并映射到内部格式
+            if (choice.finish_reason) {
+                // 将 OpenAI 的 finish_reason 映射到内部 stopReason
+                if (choice.finish_reason === 'tool_calls') {
+                    stopReason = 'tool_use';
+                } else if (choice.finish_reason === 'stop') {
+                    stopReason = 'end_turn';
+                } else {
+                    stopReason = choice.finish_reason;
+                }
+            }
+        }
+
+        // 流结束后，构建最终的 contentBlocks
+        if (currentText) {
+            contentBlocks.push({
+                type: 'text',
+                text: currentText,
+            });
+        }
+
+        // 添加工具调用块
+        for (const toolCall of currentToolCalls.values()) {
+            if (toolCall.name && toolCall.id) {
+                try {
+                    const input = JSON.parse(toolCall.arguments || '{}');
+                    contentBlocks.push({
+                        type: 'tool_use',
+                        id: toolCall.id,
+                        name: toolCall.name,
+                        input,
+                    });
+                } catch (error) {
+                    console.error('解析工具调用参数失败:', error);
+                }
+            }
+        }
+
+        return { contentBlocks, stopReason };
     }
 
     /**
