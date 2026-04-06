@@ -7,8 +7,9 @@ import {AgentLoop} from "./AgentLoop";
 export class CLI {
     private rl: readline.Interface;
 
-    constructor(private agent: AgentLoop) {
-        this.rl = readline.createInterface({
+    constructor(private agent: AgentLoop,
+                rl?: readline.Interface) {
+        this.rl = rl ?? readline.createInterface({
             input: process.stdin,
             output: process.stdout,
             terminal: false
@@ -80,7 +81,7 @@ export class CLI {
                 return "handled";
             }
             case "/reset": {
-                // this.agent.reset();
+                this.agent.reset();
                 console.log("已清空对话历史，开始新会话");
                 return "handled";
             }

@@ -107,6 +107,13 @@ export class AgentLoop {
     }
 
     /**
+     * 重置上下文
+     */
+    reset(): void {
+        this.context.reset();
+    }
+
+    /**
      * 调用模型，流式返回内容
      */
     private async callApi(onText: (delta: string) => void, skillPromptAppend: string = ''): Promise<{

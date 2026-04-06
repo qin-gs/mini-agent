@@ -12,7 +12,7 @@ import {PermissionChecker} from "./PermissionChecker";
 import {AgentLoop} from "./AgentLoop";
 import {CLI} from "./CLI";
 import {registerMCPTools} from "./MCP";
-import {SkillSystem, createDefaultSkillSystem} from "./Skill";
+import {createDefaultSkillSystem} from "./Skill";
 
 async function main() {
 
@@ -61,7 +61,7 @@ async function main() {
     console.log("-".repeat(50));
     console.log(`mini agent 权限模式: ${permission.padEnd(6)} 模型: ${model.padStart(16)}`);
     console.log("-".repeat(50));
-    const cli = new CLI(agent)
+    const cli = new CLI(agent, rl)
 
     process.on("SIGINT", () => {
         console.log(`\n\n 收到中断信号，正在退出...`);
