@@ -11,7 +11,7 @@ export class CLI {
         this.rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout,
-            terminal: true
+            terminal: false
         })
     }
 
@@ -35,6 +35,7 @@ export class CLI {
                 if (handled === "quit") {
                     break;
                 }
+                continue;
             }
 
             try {

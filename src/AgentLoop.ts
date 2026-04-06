@@ -6,7 +6,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import {ContextManager} from "./ContextManager";
 import {ToolRegistry} from "./ToolRegistry";
 import {PermissionChecker} from "./PermissionChecker";
-import {ContentBlock, TextBlock, ToolResultBlock, ToolUseBlock} from "./types";
+import type {InternalContentBlock, InternalTextBlock, InternalToolResultBlock, InternalToolUseBlock} from "./types";
 
 export class AgentLoop {
     private client: OpenAI;
@@ -53,7 +53,7 @@ export class AgentLoop {
             this.context.addAssistantMessage(contentBlocks)
 
             const textContext = contentBlocks
-                .filter((b): b is TextBlock => b.type === "text")
+                .filter((b): b is InternalTextBlock => b.type === "text")
                 .map(b => b.text)
                 .join("");
             fullResponse += textContext;
@@ -65,7 +65,7 @@ export class AgentLoop {
 
             if (stopReason === "tool_use") {
                 // 7. 找到所有需要调用工具的部分
-                const toolUseBlocks = contentBlocks.filter((b): b is ToolUseBlock => b.type === "tool_use");
+                const toolUseBlocks = contentBlocks.filter((b): b is InternalToolUseBlock => b.type === "tool_use");
 
                 if (toolUseBlocks.length === 0) {
                     break;
@@ -95,16 +95,16 @@ export class AgentLoop {
      * 调用模型，流式返回内容
      */
     private async callApi(onText: (delta: string) => void): Promise<{
-        contentBlocks: ContentBlock[];
+        contentBlocks: InternalContentBlock[];
         stopReason: string;
     }> {
         const messages = this.context.getMessages();
         const systemPrompt = this.context.buildSystemPrompt();
 
-        const contentBlocks: ContentBlock[] = [];
+        const contentBlocks: InternalContentBlock[] = [];
         let stopReason = "end_turn";
 
-        // 转换消息为 OpenAI 格式
+        // 构建 OpenAI 消息数组
         const openAIMessages: ChatCompletionMessageParam[] = [];
 
         // 添加系统提示
@@ -115,65 +115,8 @@ export class AgentLoop {
             });
         }
 
-        // 转换历史消息
-        for (const msg of messages) {
-            if (typeof msg.content === 'string') {
-                // 简单文本消息
-                openAIMessages.push({
-                    role: msg.role,
-                    content: msg.content,
-                });
-            } else if (Array.isArray(msg.content)) {
-                // 内容块数组（可能是工具调用或结果）
-                // 对于用户消息，合并所有文本块
-                if (msg.role === 'user') {
-                    const text = msg.content
-                        .filter((b): b is TextBlock => b.type === 'text')
-                        .map(b => b.text)
-                        .join('');
-                    openAIMessages.push({
-                        role: 'user',
-                        content: text,
-                    });
-                    // 工具结果块转换为 tool 角色消息
-                    const toolResults = msg.content.filter((b): b is ToolResultBlock => b.type === 'tool_result');
-                    for (const toolResult of toolResults) {
-                        openAIMessages.push({
-                            role: 'tool',
-                            content: toolResult.content,
-                            tool_call_id: toolResult.tool_use_id,
-                        });
-                    }
-                } else if (msg.role === 'assistant') {
-                    // 助手消息可能包含文本和工具调用
-                    const textBlocks = msg.content.filter((b): b is TextBlock => b.type === 'text');
-                    const toolUseBlocks = msg.content.filter((b): b is ToolUseBlock => b.type === 'tool_use');
-
-                    const textContent = textBlocks.map(b => b.text).join('');
-                    if (textContent) {
-                        openAIMessages.push({
-                            role: 'assistant',
-                            content: textContent,
-                        });
-                    }
-
-                    if (toolUseBlocks.length > 0) {
-                        openAIMessages.push({
-                            role: 'assistant',
-                            content: null,
-                            tool_calls: toolUseBlocks.map(tool => ({
-                                id: tool.id,
-                                type: 'function' as const,
-                                function: {
-                                    name: tool.name,
-                                    arguments: JSON.stringify(tool.input),
-                                },
-                            })),
-                        });
-                    }
-                }
-            }
-        }
+        // 直接使用上下文管理器中的消息（已经是 OpenAI 格式）
+        openAIMessages.push(...messages);
 
         // 获取 OpenAI 格式的工具定义
         const tools = this.registry.toOpenAIFormat();
@@ -272,8 +215,8 @@ export class AgentLoop {
      *
      * 执行前进行权限检查
      */
-    private async executeTools(toolUseBlocks: ToolUseBlock[]): Promise<ToolResultBlock[]> {
-        const results: ToolResultBlock[] = [];
+    private async executeTools(toolUseBlocks: InternalToolUseBlock[]): Promise<InternalToolResultBlock[]> {
+        const results: InternalToolResultBlock[] = [];
 
         for (let block of toolUseBlocks) {
             console.log(`\n[工具调用] ${block.name}(${JSON.stringify(block.input)})\n`);

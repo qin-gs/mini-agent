@@ -38,35 +38,32 @@ export interface Tool {
     call(input: Record<string, unknown>): Promise<string>;
 }
 
-/**
- * 消息类型 — 对应 Anthropic API 的 message 格式
- */
-export type MessageRole = "user" | "assistant";
+// 重新导出 OpenAI 的消息类型
+export type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
-export interface TextBlock {
+/**
+ * 内部使用的消息块类型（用于流式处理）
+ * 这些类型用于处理 API 返回的流式响应，最终会转换为 OpenAI 格式的消息
+ */
+export interface InternalTextBlock {
     type: "text";
     text: string;
 }
 
-export interface ToolUseBlock {
+export interface InternalToolUseBlock {
     type: "tool_use";
     id: string;
     name: string;
     input: Record<string, unknown>;
 }
 
-export interface ToolResultBlock {
+export interface InternalToolResultBlock {
     type: "tool_result";
     tool_use_id: string;
     content: string;
 }
 
-export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
-
-export interface Message {
-    role: MessageRole;
-    content: ContentBlock[] | string;
-}
+export type InternalContentBlock = InternalTextBlock | InternalToolResultBlock | InternalToolUseBlock;
 
 
 export type PermissionDecision  = "allow" | "deny";

@@ -1,4 +1,5 @@
-import {ContentBlock, Message, ToolResultBlock} from "./types";
+import type { ChatCompletionMessageParam } from "./types";
+import type { InternalContentBlock, InternalToolResultBlock, InternalTextBlock, InternalToolUseBlock } from "./types";
 
 /**
  * 上下文管理
@@ -16,7 +17,7 @@ import {ContentBlock, Message, ToolResultBlock} from "./types";
  */
 export class ContextManager {
 
-    private messages: Message[] = [];
+    private messages: ChatCompletionMessageParam[] = [];
 
     /**
      * 最大保留的消息轮数（一轮 = user + assistant）
@@ -71,34 +72,51 @@ export class ContextManager {
     addUserMessage(text: string): void {
         this.messages.push({
             role: "user",
-            content: [{type: "text", text}],
+            content: text,
         });
     }
 
     /**
      * 助手消息
      */
-    addAssistantMessage(content: ContentBlock[]): void {
-        this.messages.push({
-            role: "assistant",
-            content,
-        });
+    addAssistantMessage(content: InternalContentBlock[]): void {
+        // 分离文本块和工具调用块
+        const textBlocks = content.filter((b): b is InternalTextBlock => b.type === 'text');
+        const toolUseBlocks = content.filter((b): b is InternalToolUseBlock => b.type === 'tool_use');
+
+        const textContent = textBlocks.map(b => b.text).join('');
+
+        // 构建 OpenAI 格式的助手消息
+        const assistantMessage: ChatCompletionMessageParam = {
+            role: 'assistant',
+            content: textContent || null,
+        };
+
+        // 如果有工具调用，添加到消息中
+        if (toolUseBlocks.length > 0) {
+            assistantMessage.tool_calls = toolUseBlocks.map(tool => ({
+                id: tool.id,
+                type: 'function' as const,
+                function: {
+                    name: tool.name,
+                    arguments: JSON.stringify(tool.input),
+                },
+            }));
+        }
+
+        this.messages.push(assistantMessage);
     }
 
     /**
-     * 添加工具
+     * 添加工具结果
      */
-    addToolResults(results: ToolResultBlock[]): void {
-        const lastMessage = this.messages[this.messages.length - 1];
-
-        if (lastMessage
-            && lastMessage.role === "user"
-            && Array.isArray(lastMessage.content)) {
-            lastMessage.content.push(...results)
-        } else {
+    addToolResults(results: InternalToolResultBlock[]): void {
+        // 每个工具结果创建一个独立的 tool 角色消息
+        for (const result of results) {
             this.messages.push({
-                role: "user",
-                content: results,
+                role: 'tool',
+                content: result.content,
+                tool_call_id: result.tool_use_id,
             });
         }
     }
@@ -106,15 +124,14 @@ export class ContextManager {
     /**
      * 获取当前所有消息
      */
-    getMessages(): Message[] {
+    getMessages(): ChatCompletionMessageParam[] {
         return this.messages;
     }
 
     /**
      * 压缩消息
      *
-     * 应该：总结历史对话，生成摘要后替换原始消息
-     * 当前模拟：直接丢弃旧消息
+     * 当前实现：对于旧消息中的 tool 角色消息，压缩其内容
      */
     maybeCompact(): boolean {
         if (this.messages.length < this.compactionThreshold) {
@@ -125,12 +142,10 @@ export class ContextManager {
 
         for (let i = 0; i < keepFrom; i++) {
             const msg = this.messages[i];
-            if (Array.isArray(msg.content)) {
-                for (let block of msg.content) {
-                    if (block.type === "tool_result") {
-                        (block as ToolResultBlock).content = "内容已压缩以节省 context 空间]"
-                    }
-                }
+            // 压缩 tool 消息的内容
+            if (msg.role === 'tool' && typeof msg.content === 'string') {
+                // 保留消息结构，但缩短内容
+                msg.content = '[内容已压缩以节省 context 空间]';
             }
         }
         return true;
