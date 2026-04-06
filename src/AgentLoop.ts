@@ -35,7 +35,7 @@ export class AgentLoop {
 
         // 2. 判断是否进行上下文压缩
         if (this.context.maybeCompact()) {
-            `\n[系统：已压缩历史消息已节省空间]\n`
+            console.log('\n[系统：已压缩历史消息已节省空间]\n');
         }
 
         let fullResponse = "";

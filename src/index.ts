@@ -11,6 +11,7 @@ import {ContextManager} from "./ContextManager";
 import {PermissionChecker} from "./PermissionChecker";
 import {AgentLoop} from "./AgentLoop";
 import {CLI} from "./CLI";
+import {registerMCPTools} from "./MCP";
 
 async function main() {
 
@@ -22,6 +23,13 @@ async function main() {
         GrepTool,
         BashTool
     ])
+
+    // 加载 MCP 工具（如果配置了）
+    await registerMCPTools(registry);
+
+    // 打印所有已注册的工具（调试用）
+    const allTools = registry.all();
+    console.log(`已注册 ${allTools.length} 个工具: ${allTools.map(t => t.name).join(', ')}`);
 
     // 2. 从环境变量加载配置
     const permission = (process.env.MINI_AGENT_PERMISSION ?? 'ask') as 'auto' | 'ask' | 'strict';
