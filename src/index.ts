@@ -12,6 +12,7 @@ import {PermissionChecker} from "./PermissionChecker";
 import {AgentLoop} from "./AgentLoop";
 import {CLI} from "./CLI";
 import {registerMCPTools} from "./MCP";
+import {SkillSystem, createDefaultSkillSystem} from "./Skill";
 
 async function main() {
 
@@ -27,9 +28,13 @@ async function main() {
     // 加载 MCP 工具（如果配置了）
     await registerMCPTools(registry);
 
+    // 初始化技能系统
+    const skillSystem = createDefaultSkillSystem();
+
     // 打印所有已注册的工具（调试用）
     const allTools = registry.all();
     console.log(`已注册 ${allTools.length} 个工具: ${allTools.map(t => t.name).join(', ')}`);
+    console.log(`已注册 ${skillSystem.getSkillNames().length} 个技能: ${skillSystem.getSkillNames().join(', ')}`);
 
     // 2. 从环境变量加载配置
     const permission = (process.env.MINI_AGENT_PERMISSION ?? 'ask') as 'auto' | 'ask' | 'strict';
@@ -50,7 +55,7 @@ async function main() {
     const permissions = new PermissionChecker(permission, rl)
 
     // 6. 创建 agent loop
-    const agent = new AgentLoop(context, registry, permissions, {model, apiBaseUrl});
+    const agent = new AgentLoop(context, registry, permissions, {model, apiBaseUrl, skillSystem});
 
     // 7. 启动 cli
     console.log("-".repeat(50));

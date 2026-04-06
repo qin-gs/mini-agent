@@ -6,23 +6,26 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import {ContextManager} from "./ContextManager";
 import {ToolRegistry} from "./ToolRegistry";
 import {PermissionChecker} from "./PermissionChecker";
+import {SkillSystem} from "./Skill";
 import type {InternalContentBlock, InternalTextBlock, InternalToolResultBlock, InternalToolUseBlock} from "./types";
 
 export class AgentLoop {
     private client: OpenAI;
     private model: string;
+    private skillSystem?: SkillSystem;
 
     constructor(
         private context: ContextManager,
         private registry: ToolRegistry,
         private permissions: PermissionChecker,
-        options: { model?: string; apiBaseUrl?: string } = {}
+        options: { model?: string; apiBaseUrl?: string; skillSystem?: SkillSystem } = {}
     ) {
         this.client = new OpenAI({
             apiKey: process.env.API_KEY || process.env.OPENAI_API_KEY,
             baseURL: options.apiBaseUrl || process.env.DEEPSEEK_API_BASE || "https://api.deepseek.com",
         });
         this.model = options.model ?? "deepseek-reasoner";
+        this.skillSystem = options.skillSystem;
     }
 
     async run(
@@ -30,8 +33,20 @@ export class AgentLoop {
         onText: (delta: string) => void
     ): Promise<string> {
 
-        // 1. 添加用户输入
-        this.context.addUserMessage(userInput);
+        // 0. 技能匹配与预处理
+        let skillPromptAppend = '';
+        let processedInput = userInput;
+        if (this.skillSystem) {
+            const skill = this.skillSystem.match(userInput);
+            if (skill) {
+                processedInput = this.skillSystem.preProcessInput(userInput, skill);
+                skillPromptAppend = skill.systemPromptAppend;
+                console.log(`[技能] 已激活: ${skill.name}`);
+            }
+        }
+
+        // 1. 添加用户输入（使用预处理后的输入）
+        this.context.addUserMessage(processedInput);
 
         // 2. 判断是否进行上下文压缩
         if (this.context.maybeCompact()) {
@@ -47,7 +62,7 @@ export class AgentLoop {
             turnCount++;
 
             // 4. 调用模型，流式返回内容
-            const {contentBlocks, stopReason} = await this.callApi(onText);
+            const {contentBlocks, stopReason} = await this.callApi(onText, skillPromptAppend);
 
             // 5. 将模型回复加入历史消息
             this.context.addAssistantMessage(contentBlocks)
@@ -94,12 +109,15 @@ export class AgentLoop {
     /**
      * 调用模型，流式返回内容
      */
-    private async callApi(onText: (delta: string) => void): Promise<{
+    private async callApi(onText: (delta: string) => void, skillPromptAppend: string = ''): Promise<{
         contentBlocks: InternalContentBlock[];
         stopReason: string;
     }> {
         const messages = this.context.getMessages();
-        const systemPrompt = this.context.buildSystemPrompt();
+        let systemPrompt = this.context.buildSystemPrompt();
+        if (skillPromptAppend) {
+            systemPrompt += '\n\n' + skillPromptAppend;
+        }
 
         const contentBlocks: InternalContentBlock[] = [];
         let stopReason = "end_turn";

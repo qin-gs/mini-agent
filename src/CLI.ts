@@ -35,7 +35,10 @@ export class CLI {
                 if (handled === "quit") {
                     break;
                 }
-                continue;
+                if (handled === "handled") {
+                    continue;
+                }
+                // handled === "not_handled"，继续执行普通输入流程
             }
 
             try {
@@ -63,7 +66,7 @@ export class CLI {
         })
     }
 
-    private async handleCommand(command: string): Promise<string | void> {
+    private async handleCommand(command: string): Promise<string> {
         switch (command) {
             case "/help": {
                 console.log(
@@ -74,25 +77,25 @@ export class CLI {
                         /status - 显示当前状态
                     `
                 )
-                break;
+                return "handled";
             }
             case "/reset": {
                 // this.agent.reset();
                 console.log("已清空对话历史，开始新会话");
-                break;
+                return "handled";
             }
             case "/exit": {
                 console.log("bye~");
-                return "quit"
+                return "quit";
             }
             case "/status": {
                 console.log(`[状态] REPL 运行中`);
-                break;
+                return "handled";
             }
             default: {
-                console.log(`未知命令: ${command}。输入 /help 查看可用命令。`);
+                // 未知命令，交给技能系统处理
+                return "not_handled";
             }
         }
-
     }
 }
