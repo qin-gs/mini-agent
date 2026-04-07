@@ -1,5 +1,5 @@
-import type { ChatCompletionMessageParam } from "./types";
 import type { InternalContentBlock, InternalToolResultBlock, InternalTextBlock, InternalToolUseBlock } from "./types";
+import {ChatCompletionMessageParam} from "openai/resources/chat/completions";
 
 /**
  * 上下文管理

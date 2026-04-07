@@ -11,7 +11,7 @@ export class CLI {
         this.rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout,
-            terminal: false
+            terminal: true
         })
     }
 

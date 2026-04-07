@@ -12,7 +12,7 @@ import {PermissionChecker} from "./PermissionChecker";
 import {AgentLoop} from "./AgentLoop";
 import {CLI} from "./CLI";
 import {registerMCPTools} from "./MCP";
-import {SkillSystem, createDefaultSkillSystem} from "./Skill";
+import {createDefaultSkillSystem} from "./Skill";
 
 async function main() {
 
@@ -38,8 +38,8 @@ async function main() {
 
     // 2. 从环境变量加载配置
     const permission = (process.env.MINI_AGENT_PERMISSION ?? 'ask') as 'auto' | 'ask' | 'strict';
-    const model = process.env.MINI_AGENT_MODEL ?? 'deepseek-reasoner';
-    const apiBaseUrl = process.env.DEEPSEEK_API_BASE;
+    const model = process.env.MINI_AGENT_MODEL ?? 'qwen-plus';
+    const apiBaseUrl = process.env.API_BASE_URL;
 
     // 3. 上下文管理
     const context = new ContextManager({

@@ -21,10 +21,10 @@ export class AgentLoop {
         options: { model?: string; apiBaseUrl?: string; skillSystem?: SkillSystem } = {}
     ) {
         this.client = new OpenAI({
-            apiKey: process.env.API_KEY || process.env.OPENAI_API_KEY,
-            baseURL: options.apiBaseUrl || process.env.DEEPSEEK_API_BASE || "https://api.deepseek.com",
+            apiKey: process.env.API_KEY,
+            baseURL: options.apiBaseUrl,
         });
-        this.model = options.model ?? "deepseek-reasoner";
+        this.model = options.model ?? "qwen-plus";
         this.skillSystem = options.skillSystem;
     }
 
