@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniAgent Web 界面</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+
+        <main>
+            <div class="chat-container">
+                <div class="messages" id="messages">
+                    <!-- 消息将在这里显示 -->
+                </div>
+
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <textarea
+                            id="message-input"
+                            placeholder="输入消息... (按 Enter 发送，Shift+Enter 换行)"
+                            rows="3"
+                        ></textarea>
+                        <button id="send-btn" class="btn btn-primary">
+                            <i class="fas fa-paper-plane"></i> 发送
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <!-- 权限请求对话框 -->
+    <div id="permission-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-shield-alt"></i> 权限请求</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="permission-info">
+                    <div class="permission-tool" id="permission-tool-name">工具名</div>
+                    <div class="permission-description" id="permission-description">描述</div>
+                    <div class="permission-input" id="permission-input">参数</div>
+                </div>
+                <div class="permission-actions">
+                    <button id="permission-allow" class="btn btn-success">
+                        <i class="fas fa-check"></i> 允许
+                    </button>
+                    <button id="permission-deny" class="btn btn-danger">
+                        <i class="fas fa-times"></i> 拒绝
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

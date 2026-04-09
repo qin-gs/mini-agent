@@ -8,7 +8,7 @@ import {BashTool} from "./tools/BashTool";
 import {GrepTool} from "./tools/GrepTool";
 import {WriteFileTool} from "./tools/WriteFileTool";
 import {ContextManager} from "./ContextManager";
-import {PermissionChecker} from "./PermissionChecker";
+import {PermissionChecker, type PermissionRequest, type PermissionDecision} from "./PermissionChecker";
 import {AgentLoop} from "./AgentLoop";
 import {CLI} from "./CLI";
 import {registerMCPTools} from "./MCP";
@@ -51,24 +51,90 @@ async function main() {
     const {createInterface} = await import("node:readline")
     const rl = createInterface({input: process.stdin, output: process.stdout})
 
-    // 5. 权限检查器
-    const permissions = new PermissionChecker(permission, rl)
+    // 5. 创建 CLI 专用的询问函数
+    const cliAskUser = async (request: PermissionRequest, isDangerous: boolean): Promise<PermissionDecision> => {
+        const prefix = isDangerous ? "高危操作" : "需要确认";
+        console.log(`\n${prefix}: ${request.toolName}`)
+        console.log(`描述：${request.description}`);
+        console.log(`参数：${JSON.stringify(request.input, null, 2)}`);
+
+        return new Promise<PermissionDecision>((resolve) => {
+            rl.question("允许执行? [y/N] ", (answer) => {
+                const decision = answer.toLowerCase() === "y" ? "allow" : "deny";
+                resolve(decision);
+            });
+        });
+    };
+
+    // 6. 权限检查器
+    const permissions = new PermissionChecker(permission, cliAskUser)
 
     // 6. 创建 agent loop
     const agent = new AgentLoop(context, registry, permissions, {model, apiBaseUrl, skillSystem});
 
-    // 7. 启动 cli
+    // 7. 确定运行模式
+    const mode = (process.env.MINI_AGENT_MODE || 'cli').toLowerCase() as 'cli' | 'web' | 'both';
+    const webPort = parseInt(process.env.WEB_PORT || '3000', 10);
+
     console.log("-".repeat(50));
     console.log(`mini agent 权限模式: ${permission.padEnd(6)} 模型: ${model.padStart(16)}`);
+    console.log(`运行模式: ${mode.padEnd(6)} ${mode.includes('web') ? `端口: ${webPort}` : ''}`);
     console.log("-".repeat(50));
-    const cli = new CLI(agent, rl)
 
-    process.on("SIGINT", () => {
-        console.log(`\n\n 收到中断信号，正在退出...`);
-        process.exit(0);
-    })
+    // 8. 根据模式启动服务
+    if (mode === 'cli' || mode === 'both') {
+        const cli = new CLI(agent, rl);
 
-    await cli.start();
+        process.on("SIGINT", () => {
+            console.log(`\n\n 收到中断信号，正在退出...`);
+            process.exit(0);
+        });
+
+        // CLI 模式可以直接启动
+        if (mode === 'cli') {
+            await cli.start();
+        } else {
+            // both 模式：启动 CLI 但不阻塞，同时启动 Web 服务器
+            cli.start().catch(console.error);
+        }
+    }
+
+    if (mode === 'web' || mode === 'both') {
+        // 导入 WebServer（动态导入以避免不必要的依赖）
+        const { WebServer } = await import('./server.js');
+
+        // 创建 Web 服务器
+        const webServer = new WebServer(
+            context,
+            registry,
+            permissions,
+            skillSystem,
+            {
+                port: webPort,
+                mode: mode as 'web' | 'both'
+            }
+        );
+
+        webServer.start();
+
+        console.log(`Web 服务器已启动: http://localhost:${webPort}`);
+        console.log(`前端界面: http://localhost:${webPort}/index.html`);
+
+        // 在 both 模式下，CLI 已经在运行
+        if (mode === 'web') {
+            // Web 模式下，保持进程运行
+            process.on("SIGINT", () => {
+                console.log(`\n\n 收到中断信号，正在退出...`);
+                process.exit(0);
+            });
+        }
+    }
+
+    // 如果都没有启动（不应该发生），则等待
+    if (mode !== 'cli' && mode !== 'web' && mode !== 'both') {
+        console.error(`未知模式: ${mode}`);
+        process.exit(1);
+    }
 
 }
 

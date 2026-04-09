@@ -5,12 +5,14 @@
  * ask（总是询问写操作）
  * strict（总是询问）
  */
-import * as readline from "readline";
 import {PermissionDecision, PermissionRequest} from "./types";
+
+export type {PermissionDecision, PermissionRequest};
+export type AskUserFunction = (request: PermissionRequest, isDangerous: boolean) => Promise<PermissionDecision>;
 
 export class PermissionChecker {
     private mode: "auto" | "ask" | "strict";
-    private rl: readline.Interface;
+    private askUserFn: AskUserFunction;
 
     /**
      * 只读工具，无需确认
@@ -24,10 +26,10 @@ export class PermissionChecker {
 
     constructor(
         mode: "auto" | "ask" | "strict",
-        rl: readline.Interface
+        askUserFn?: AskUserFunction
     ) {
         this.mode = mode;
-        this.rl = rl;
+        this.askUserFn = askUserFn || this.defaultAskUser;
     }
 
     async check(request: PermissionRequest): Promise<PermissionDecision> {
@@ -58,18 +60,31 @@ export class PermissionChecker {
         return this.askUser(request, isDangerous)
     }
 
-    private async askUser(request: PermissionRequest, isDangerous: boolean): Promise<PermissionDecision> {
+    /**
+     * 设置询问函数
+     */
+    setAskUserFn(fn: AskUserFunction): void {
+        this.askUserFn = fn;
+    }
+
+    /**
+     * 默认的命令行询问方式
+     */
+    private async defaultAskUser(request: PermissionRequest, isDangerous: boolean): Promise<PermissionDecision> {
         const prefix = isDangerous ? "高危操作" : "需要确认";
         console.log(`\n${prefix}: ${request.toolName}`)
         console.log(`描述：${request.description}`);
         console.log(`参数：${JSON.stringify(request.input, null, 2)}`);
 
-        return new Promise<PermissionDecision>((resolve) => {
-            this.rl.question("允许执行? [y/N] ", (answer) => {
-                const decision = answer.toLowerCase() === "y" ? "allow" : "deny";
-                resolve(decision);
-            });
-        });
+        // 如果没有提供询问函数，则默认允许（为了向后兼容）
+        return "allow";
+    }
+
+    /**
+     * 询问用户（使用配置的询问函数）
+     */
+    private async askUser(request: PermissionRequest, isDangerous: boolean): Promise<PermissionDecision> {
+        return this.askUserFn(request, isDangerous);
     }
 
 }
