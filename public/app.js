@@ -173,11 +173,11 @@ class MiniAgentWeb {
                     break;
 
                 case 'tool_use':
-                    // 不显示工具调用消息，但保持当前助手消息（包括loading）
+                    this.addToolUseMessage(message.tool, message.input, message.id);
                     break;
 
                 case 'tool_result':
-                    // 不显示工具结果消息，但保持当前助手消息（包括loading）
+                    this.addToolResultMessage(message.toolUseId, message.content);
                     break;
 
                 case 'error':
