@@ -4,6 +4,42 @@
 
 > 参考：[https://github.com/jiji262/build-code-agent](https://github.com/jiji262/build-code-agent)
 
+## Agent Loop 的核心实现逻辑抽象
+
+对应的控制流如下，感知 -> 决策 -> 行动 -> 反馈四个阶段不断循环，直到模型返回纯文本为止
+
+[参考](https://x.com/HiTw93/status/2034627967926825175)
+
+```typescript
+const messages: MessageParam[] = [{ role: "user", content: userInput }];
+
+while (true) {
+  const response = await client.messages.create({
+    model: "claude-opus-4-6",
+    max_tokens: 8096,
+    tools: toolDefinitions,
+    messages,
+  });
+
+  if (response.stop_reason === "tool_use") {
+    const toolResults = await Promise.all(
+      response.content
+        .filter((b) => b.type === "tool_use")
+        .map(async (b) => ({
+          type: "tool_result" as const,
+          tool_use_id: b.id,
+          content: await executeTool(b.name, b.input),
+        }))
+    );
+    messages.push({ role: "assistant", content: response.content });
+    messages.push({ role: "user", content: toolResults });
+  } else {
+    return response.content.find((b) => b.type === "text")?.text ?? "";
+  }
+}
+```
+
+
 ## ✨ 特性
 
 - **🛠️ 工具系统**: 内置文件读写、Bash 命令、文本搜索等核心工具，支持自定义工具扩展
@@ -156,7 +192,7 @@ registry.register(MyTool);
 
 在 `.env` 中配置 `MCP_SERVERS`（JSON 数组格式）：
 
-```json
+```markdown
 MCP_SERVERS='[
   {"command": "npx", "args": ["mcp-time-workdays-node"]},
   {"command": "npx", "args": ["mcp-chrono"]}
